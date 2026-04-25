@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { api, Order } from '@/lib/api';
 import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import OrderStatusTracker from '@/components/OrderStatusTracker';
 
 export default function OrderDetailPage() {
   const params = useParams();
@@ -14,6 +15,8 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
+  const [reorderMsg, setReorderMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrder();
@@ -45,6 +48,26 @@ export default function OrderDetailPage() {
 
   const formatStatus = (status: string) => {
     return status.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  const handleReorder = async () => {
+    if (!order) return;
+    try {
+      setReordering(true);
+      setReorderMsg(null);
+      const res = await api.reorder(order.id);
+      if (res.added.length === 0) {
+        setReorderMsg('No items could be added to your cart (everything is unavailable or out of stock).');
+        return;
+      }
+      const skippedNote = res.skipped.length > 0 ? ` Skipped ${res.skipped.length} item(s).` : '';
+      setReorderMsg(`Added ${res.added.length} item(s) to your cart.${skippedNote}`);
+      setTimeout(() => router.push('/cart'), 600);
+    } catch (err: any) {
+      setReorderMsg(err.message || 'Could not reorder right now.');
+    } finally {
+      setReordering(false);
+    }
   };
 
   if (loading) {
@@ -83,7 +106,7 @@ export default function OrderDetailPage() {
           </button>
 
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6 border border-gray-100 animate-fadeIn">
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-start mb-4 gap-3 flex-wrap">
               <div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">Order #{order.id}</h1>
                 <p className="text-sm text-gray-500 flex items-center gap-2">
@@ -98,6 +121,25 @@ export default function OrderDetailPage() {
                 {formatStatus(order.status)}
               </span>
             </div>
+
+            <div className="mb-4">
+              <OrderStatusTracker status={order.status} />
+            </div>
+
+            <div className="flex flex-wrap gap-3 mb-4">
+              <button
+                onClick={handleReorder}
+                disabled={reordering}
+                className="px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-full font-semibold shadow disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-300 transform hover:scale-105 active:scale-95"
+              >
+                {reordering ? 'Adding to cart...' : '🔁 Reorder these items'}
+              </button>
+            </div>
+            {reorderMsg && (
+              <div className="mb-4 bg-primary-50 border border-primary-200 text-primary-800 px-4 py-3 rounded-lg text-sm">
+                {reorderMsg}
+              </div>
+            )}
 
             <div className="border-t-2 border-gray-200 pt-4">
               <h2 className="font-bold mb-3 text-gray-800 flex items-center gap-2">
@@ -161,6 +203,16 @@ export default function OrderDetailPage() {
                 <span className="text-gray-600 font-medium">Subtotal</span>
                 <span className="font-semibold text-lg">Rs. {parseFloat(order.subtotal).toFixed(2)}</span>
               </div>
+              {parseFloat(order.discount || '0') > 0 && (
+                <div className="flex justify-between items-center py-2 border-t border-gray-200">
+                  <span className="text-green-700 font-medium flex items-center gap-1">
+                    🏷️ Coupon{order.coupon_code ? ` (${order.coupon_code})` : ''}
+                  </span>
+                  <span className="font-semibold text-lg text-green-700">
+                    -Rs. {parseFloat(order.discount).toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between items-center py-2 border-t border-gray-200">
                 <span className="text-gray-600 font-medium">Delivery Fee</span>
                 <span className="font-semibold text-lg">

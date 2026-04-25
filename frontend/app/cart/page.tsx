@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { api, Cart } from '@/lib/api';
+import { api, Cart, CouponValidation } from '@/lib/api';
 import Layout from '@/components/Layout';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,7 +15,16 @@ export default function CartPage() {
   const [updating, setUpdating] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponValidation | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+
   const isWholesale = accountType === 'WHOLESALE' && wholesaleApproved;
+  // Business rules - keep in sync with backend settings
+  const RETAIL_MIN_ORDER = 800;
+  const RETAIL_FREE_DELIVERY_THRESHOLD = 5000;
+  const RETAIL_DELIVERY_FEE = 100;
   const WHOLESALE_MIN_ORDER = 3000;
 
   useEffect(() => {
@@ -64,11 +73,57 @@ export default function CartPage() {
   };
 
   const subtotal = cart ? parseFloat(cart.total) : 0;
-  // Delivery fee: Free for wholesale, otherwise retail rules
-  const deliveryFee = isWholesale ? 0 : (subtotal >= 800 ? 0 : 50);
-  const total = subtotal + deliveryFee;
-  const meetsMinimumOrder = isWholesale ? subtotal >= WHOLESALE_MIN_ORDER : true;
-  const minOrderShortfall = isWholesale && subtotal < WHOLESALE_MIN_ORDER ? (WHOLESALE_MIN_ORDER - subtotal) : 0;
+  const discount = appliedCoupon ? parseFloat(appliedCoupon.discount) : 0;
+  // Re-evaluate the free-delivery threshold after the coupon discount.
+  const subtotalAfterDiscount = Math.max(0, subtotal - discount);
+  const deliveryFee = isWholesale
+    ? 0
+    : (subtotalAfterDiscount >= RETAIL_FREE_DELIVERY_THRESHOLD ? 0 : RETAIL_DELIVERY_FEE);
+  const total = subtotalAfterDiscount + deliveryFee;
+  const minOrderRequired = isWholesale ? WHOLESALE_MIN_ORDER : RETAIL_MIN_ORDER;
+  const meetsMinimumOrder = subtotal >= minOrderRequired;
+  const minOrderShortfall = meetsMinimumOrder ? 0 : minOrderRequired - subtotal;
+  const amountForFreeDelivery = !isWholesale && subtotalAfterDiscount > 0 && subtotalAfterDiscount < RETAIL_FREE_DELIVERY_THRESHOLD
+    ? RETAIL_FREE_DELIVERY_THRESHOLD - subtotalAfterDiscount
+    : 0;
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+    try {
+      setCouponLoading(true);
+      setCouponError(null);
+      const result = await api.validateCoupon(code);
+      setAppliedCoupon(result);
+    } catch (err: any) {
+      setAppliedCoupon(null);
+      setCouponError(err.message || 'Could not apply coupon.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('apni_coupon');
+    }
+  };
+
+  // Persist the applied coupon code so the checkout page can read it.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (appliedCoupon) {
+      sessionStorage.setItem('apni_coupon', appliedCoupon.coupon.code);
+    } else {
+      sessionStorage.removeItem('apni_coupon');
+    }
+  }, [appliedCoupon]);
 
   if (loading) {
     return (
@@ -171,11 +226,60 @@ export default function CartPage() {
                 <h2 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-gray-800 flex items-center gap-2">
                   <span>💰</span> Order Summary
                 </h2>
+                {/* Coupon */}
+                <div className="mb-3 sm:mb-4 p-3 border-2 border-dashed border-primary-200 rounded-lg bg-white/60">
+                  <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
+                    <span aria-hidden="true">🏷️</span> Have a promo code?
+                  </p>
+                  {appliedCoupon ? (
+                    <div className="flex items-center justify-between gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <div className="text-sm text-green-800 min-w-0">
+                        <span className="font-bold">{appliedCoupon.coupon.code}</span> applied — saved Rs.{' '}
+                        {parseFloat(appliedCoupon.discount).toFixed(2)}
+                      </div>
+                      <button
+                        onClick={removeCoupon}
+                        className="text-xs text-red-600 hover:text-red-700 underline font-semibold flex-shrink-0"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <input
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
+                        placeholder="WELCOME200"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-sm uppercase tracking-wide"
+                      />
+                      <button
+                        onClick={applyCoupon}
+                        disabled={couponLoading}
+                        className="px-4 py-2 bg-primary-500 hover:bg-primary-600 disabled:opacity-60 text-white text-sm font-semibold rounded-lg whitespace-nowrap"
+                      >
+                        {couponLoading ? 'Applying...' : 'Apply'}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && <p className="mt-2 text-xs text-red-600">{couponError}</p>}
+                </div>
+
                 <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
                   <div className="flex justify-between items-center py-2">
                     <span className="text-sm sm:text-base text-gray-600 font-medium">Subtotal</span>
                     <span className="font-semibold text-base sm:text-lg">Rs. {subtotal.toFixed(2)}</span>
                   </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between items-center py-2 border-t border-gray-200">
+                      <span className="text-sm sm:text-base text-green-700 font-medium">
+                        Discount ({appliedCoupon?.coupon.code})
+                      </span>
+                      <span className="font-semibold text-base sm:text-lg text-green-700">
+                        -Rs. {discount.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center py-2 border-t border-gray-200">
                     <span className="text-sm sm:text-base text-gray-600 font-medium">Delivery Fee</span>
                     <span className="font-semibold text-base sm:text-lg">
@@ -186,17 +290,17 @@ export default function CartPage() {
                       )}
                     </span>
                   </div>
-                  {isWholesale && !meetsMinimumOrder && (
+                  {!meetsMinimumOrder && (
                     <div className="bg-red-50 border-2 border-red-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
                       <p className="text-xs sm:text-sm text-red-700 font-semibold text-center">
-                        ⚠️ Minimum order for wholesale is Rs. {WHOLESALE_MIN_ORDER.toFixed(2)}. Add Rs. {minOrderShortfall.toFixed(2)} more to proceed.
+                        ⚠️ Minimum order is Rs. {minOrderRequired.toFixed(2)}. Add Rs. {minOrderShortfall.toFixed(2)} more to place this order.
                       </p>
                     </div>
                   )}
-                  {!isWholesale && subtotal < 800 && (
+                  {meetsMinimumOrder && amountForFreeDelivery > 0 && (
                     <div className="bg-accent-50 border-2 border-accent-200 rounded-lg p-2 sm:p-3 mt-2 sm:mt-3">
                       <p className="text-xs sm:text-sm text-accent-700 font-semibold text-center">
-                        🎁 Add Rs. {(800 - subtotal).toFixed(2)} more for free delivery!
+                        🎁 Add Rs. {amountForFreeDelivery.toFixed(2)} more for free home delivery!
                       </p>
                     </div>
                   )}

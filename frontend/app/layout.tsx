@@ -42,7 +42,21 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#22c55e" />
-        <title>Apni Dukan - Grocery Delivery</title>
+        <link
+          rel="icon"
+          href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9B%92%3C/text%3E%3C/svg%3E"
+        />
+        <title>Apni Dukan - Online Grocery Store | Free Delivery Over Rs. 5000</title>
+        <meta
+          name="description"
+          content="Apni Dukan - Order groceries online and get them delivered to your doorstep. Minimum order Rs. 800, free home delivery on orders over Rs. 5000."
+        />
+        <meta property="og:title" content="Apni Dukan - Online Grocery Store" />
+        <meta
+          property="og:description"
+          content="Fresh groceries delivered to your home. Minimum order Rs. 800. Free delivery on orders over Rs. 5000."
+        />
+        <meta property="og:type" content="website" />
       </head>
       <body>
         <AuthProvider>{children}</AuthProvider>

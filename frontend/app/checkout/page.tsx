@@ -92,7 +92,10 @@ export default function CheckoutPage() {
     try {
       setPlacingOrder(true);
       setError(null);
-      const order = await api.checkout(selectedAddressId, paymentMethod);
+      const couponCode =
+        typeof window !== 'undefined' ? sessionStorage.getItem('apni_coupon') || undefined : undefined;
+      const order = await api.checkout(selectedAddressId, paymentMethod, couponCode);
+      if (typeof window !== 'undefined') sessionStorage.removeItem('apni_coupon');
       router.push(`/orders/${order.id}`);
     } catch (err: any) {
       setError(err.message || 'Failed to place order');
@@ -311,45 +314,66 @@ export default function CheckoutPage() {
             </div>
           </div>
 
-          {/* Order Summary */}
-          {cart && (
-            <div className="bg-gradient-to-br from-white to-primary-50 rounded-xl shadow-lg p-6 mb-6 border-2 border-primary-200">
-              <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
-                <span>💰</span> Order Summary
-                {isWholesale && (
-                  <span className="ml-auto px-3 py-1 bg-accent-500 text-white text-xs font-bold rounded-full">
-                    Wholesale Order
-                  </span>
-                )}
-              </h2>
-              <div className="space-y-3 mb-4">
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-gray-600 font-medium">Subtotal</span>
-                  <span className="font-semibold text-lg">Rs. {parseFloat(cart.total).toFixed(2)}</span>
+          {/* Order Summary - business rules kept in sync with backend settings */}
+          {cart && (() => {
+            const RETAIL_FREE_DELIVERY_THRESHOLD = 5000;
+            const RETAIL_DELIVERY_FEE = 100;
+            const subtotal = parseFloat(cart.total);
+            const couponCode =
+              typeof window !== 'undefined' ? sessionStorage.getItem('apni_coupon') : null;
+            const deliveryFee = isWholesale
+              ? 0
+              : subtotal >= RETAIL_FREE_DELIVERY_THRESHOLD
+              ? 0
+              : RETAIL_DELIVERY_FEE;
+            return (
+              <div className="bg-gradient-to-br from-white to-primary-50 rounded-xl shadow-lg p-6 mb-6 border-2 border-primary-200">
+                <h2 className="text-xl font-bold mb-4 text-gray-800 flex items-center gap-2">
+                  <span>💰</span> Order Summary
+                  {isWholesale && (
+                    <span className="ml-auto px-3 py-1 bg-accent-500 text-white text-xs font-bold rounded-full">
+                      Wholesale Order
+                    </span>
+                  )}
+                </h2>
+                <div className="space-y-3 mb-4">
+                  <div className="flex justify-between items-center py-2">
+                    <span className="text-gray-600 font-medium">Subtotal</span>
+                    <span className="font-semibold text-lg">Rs. {subtotal.toFixed(2)}</span>
+                  </div>
+                  {couponCode && (
+                    <div className="flex justify-between items-center py-2 border-t border-gray-200 text-green-700">
+                      <span className="font-medium">Coupon ({couponCode})</span>
+                      <span className="font-semibold text-sm">applied at checkout</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center py-2 border-t border-gray-200">
+                    <span className="text-gray-600 font-medium">Delivery Fee</span>
+                    <span className="font-semibold text-lg">
+                      {deliveryFee === 0 ? (
+                        <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full text-sm">Free</span>
+                      ) : (
+                        `Rs. ${deliveryFee.toFixed(2)}`
+                      )}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-2 border-t border-gray-200">
-                  <span className="text-gray-600 font-medium">Delivery Fee</span>
-                  <span className="font-semibold text-lg">
-                    {isWholesale ? (
-                      <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full text-sm">Free</span>
-                    ) : parseFloat(cart.total) >= 800 ? (
-                      <span className="text-green-600 bg-green-100 px-3 py-1 rounded-full text-sm">Free</span>
-                    ) : (
-                      `Rs. 50.00`
-                    )}
-                  </span>
+                <div className="border-t-2 border-primary-300 pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xl font-bold text-gray-800">Total</span>
+                    <span className="text-2xl font-bold text-primary-600">
+                      Rs. {(subtotal + deliveryFee).toFixed(2)}
+                    </span>
+                  </div>
+                  {couponCode && (
+                    <p className="text-xs text-gray-500 mt-2 text-right">
+                      Final total after coupon will be confirmed on the next step.
+                    </p>
+                  )}
                 </div>
               </div>
-              <div className="border-t-2 border-primary-300 pt-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-xl font-bold text-gray-800">Total</span>
-                  <span className="text-2xl font-bold text-primary-600">
-                    Rs. {(parseFloat(cart.total) + (isWholesale ? 0 : parseFloat(cart.total) >= 800 ? 0 : 50)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Place Order Button */}
           <button

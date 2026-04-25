@@ -7,6 +7,7 @@ router.register(r'categories', views.CategoryViewSet, basename='category')
 router.register(r'products', views.ProductViewSet, basename='product')
 router.register(r'addresses', views.AddressViewSet, basename='address')
 router.register(r'orders', views.OrderViewSet, basename='order')
+router.register(r'reviews', views.ReviewViewSet, basename='review')
 
 urlpatterns = [
     path('auth/signup/', views.signup, name='signup'),
@@ -18,5 +19,8 @@ urlpatterns = [
     path('cart/update/<int:cart_item_id>/', views.update_cart_item, name='update-cart-item'),
     path('cart/remove/<int:cart_item_id>/', views.remove_cart_item, name='remove-cart-item'),
     path('checkout/', views.checkout, name='checkout'),
+    path('coupons/validate/', views.validate_coupon, name='validate-coupon'),
+    path('newsletter/subscribe/', views.newsletter_subscribe, name='newsletter-subscribe'),
+    path('admin/dashboard-stats/', views.admin_dashboard_stats, name='admin-dashboard-stats'),
     path('', include(router.urls)),
 ]

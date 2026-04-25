@@ -1,7 +1,11 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.db.models import Avg, Count
 from rest_framework.authtoken.models import Token
-from .models import Category, Product, Address, Cart, CartItem, Order, OrderItem, UserProfile
+from .models import (
+    Category, Product, Address, Cart, CartItem, Order, OrderItem, UserProfile,
+    Review, Coupon, NewsletterSubscriber,
+)
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -49,7 +53,7 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'slug', 'image_url', 'is_active']
 
     def get_image_url(self, obj):
-        return _resolve_image(self.context.get('request'), obj.image)
+        return _resolve_image(self.context.get('request'), obj.image, obj.image_url)
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -60,6 +64,9 @@ class ProductSerializer(serializers.ModelSerializer):
     wholesale_price = serializers.SerializerMethodField()
     wholesale_min_qty = serializers.IntegerField(read_only=True)
     image_url = serializers.SerializerMethodField()
+    average_rating = serializers.SerializerMethodField()
+    review_count = serializers.SerializerMethodField()
+    is_low_stock = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -67,9 +74,22 @@ class ProductSerializer(serializers.ModelSerializer):
             'id', 'category', 'category_name', 'name', 'slug', 'description',
             'price', 'sale_price', 'effective_price', 'display_price',
             'retail_price', 'wholesale_price', 'wholesale_min_qty',
-            'is_wholesale_available', 'stock_quantity',
-            'unit', 'image_url', 'is_active', 'created_at'
+            'is_wholesale_available', 'stock_quantity', 'is_low_stock',
+            'unit', 'image_url', 'is_active', 'created_at',
+            'average_rating', 'review_count',
         ]
+
+    def get_average_rating(self, obj):
+        agg = obj.reviews.filter(is_approved=True).aggregate(avg=Avg('rating'))
+        return round(agg['avg'], 1) if agg['avg'] is not None else None
+
+    def get_review_count(self, obj):
+        return obj.reviews.filter(is_approved=True).count()
+
+    def get_is_low_stock(self, obj):
+        from django.conf import settings
+        threshold = getattr(settings, 'LOW_STOCK_THRESHOLD', 5)
+        return 0 < obj.stock_quantity <= threshold
 
     def get_image_url(self, obj):
         return _resolve_image(self.context.get('request'), obj.image, obj.image_url)
@@ -140,9 +160,13 @@ class OrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'user', 'address', 'address_details', 'status', 'payment_method',
-            'order_type', 'subtotal', 'delivery_fee', 'total', 'items', 'created_at'
+            'order_type', 'subtotal', 'discount', 'coupon_code', 'delivery_fee',
+            'total', 'items', 'created_at',
         ]
-        read_only_fields = ['user', 'subtotal', 'delivery_fee', 'total', 'created_at', 'order_type']
+        read_only_fields = [
+            'user', 'subtotal', 'discount', 'coupon_code', 'delivery_fee', 'total',
+            'created_at', 'order_type',
+        ]
 
 
 class AddToCartSerializer(serializers.Serializer):
@@ -166,6 +190,7 @@ class UpdateCartItemSerializer(serializers.Serializer):
 class CheckoutSerializer(serializers.Serializer):
     address_id = serializers.IntegerField()
     payment_method = serializers.ChoiceField(choices=Order.PAYMENT_METHOD_CHOICES, default='COD')
+    coupon_code = serializers.CharField(max_length=50, required=False, allow_blank=True)
 
     def validate_address_id(self, value):
         try:
@@ -179,3 +204,29 @@ class WholesaleRequestSerializer(serializers.Serializer):
     shop_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
     shop_address = serializers.CharField(required=False, allow_blank=True)
     shop_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Review
+        fields = ['id', 'product', 'user', 'user_name', 'rating', 'title', 'body', 'created_at']
+        read_only_fields = ['user', 'created_at']
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
+class CouponSerializer(serializers.ModelSerializer):
+    """Public-safe view of a coupon - never expose internal counters."""
+
+    class Meta:
+        model = Coupon
+        fields = ['code', 'description', 'discount_type', 'discount_value',
+                  'min_order_amount', 'max_discount_amount', 'valid_until']
+        read_only_fields = fields
+
+
+class NewsletterSubscribeSerializer(serializers.Serializer):
+    email = serializers.EmailField()

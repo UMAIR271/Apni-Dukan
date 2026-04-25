@@ -154,6 +154,36 @@ REST_FRAMEWORK = {
 }
 
 
+# Cache ----------------------------------------------------------------------
+# Local-memory cache by default. Free, in-process, no extra service required.
+# Set REDIS_URL env var if you want distributed caching across workers.
+
+REDIS_URL = os.environ.get('REDIS_URL', '')
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'TIMEOUT': 300,
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'apni-dukan-default',
+            'TIMEOUT': 300,
+        }
+    }
+
+
+# Rate limiting --------------------------------------------------------------
+# django-ratelimit configuration. Disable in DEBUG so dev work isn't blocked.
+
+RATELIMIT_ENABLE = env_bool('RATELIMIT_ENABLE', not DEBUG)
+RATELIMIT_USE_CACHE = 'default'
+
+
 # CORS -----------------------------------------------------------------------
 
 CORS_ALLOWED_ORIGINS = env_list(
@@ -185,3 +215,45 @@ if not DEBUG:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+
+
+# Business rules -------------------------------------------------------------
+
+# Retail (regular customer) order rules
+RETAIL_MIN_ORDER = int(os.environ.get('RETAIL_MIN_ORDER', 800))
+RETAIL_FREE_DELIVERY_THRESHOLD = int(os.environ.get('RETAIL_FREE_DELIVERY_THRESHOLD', 5000))
+RETAIL_DELIVERY_FEE = int(os.environ.get('RETAIL_DELIVERY_FEE', 100))
+
+# Wholesale order rules
+WHOLESALE_MIN_ORDER = int(os.environ.get('WHOLESALE_MIN_ORDER', 3000))
+
+# Stock alerts
+LOW_STOCK_THRESHOLD = int(os.environ.get('LOW_STOCK_THRESHOLD', 5))
+
+
+# Site / SEO -----------------------------------------------------------------
+
+SITE_NAME = os.environ.get('SITE_NAME', 'Apni Dukan')
+# Used by sitemap.xml and absolute URLs in metadata. No trailing slash.
+SITE_URL = os.environ.get('SITE_URL', 'http://localhost:3000').rstrip('/')
+
+
+# Email ----------------------------------------------------------------------
+# Console backend in dev (prints to terminal). SMTP backend in prod when
+# EMAIL_HOST_USER + EMAIL_HOST_PASSWORD are set.
+
+EMAIL_BACKEND = os.environ.get(
+    'EMAIL_BACKEND',
+    'django.core.mail.backends.console.EmailBackend' if DEBUG
+    else 'django.core.mail.backends.smtp.EmailBackend',
+)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', True)
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get(
+    'DEFAULT_FROM_EMAIL',
+    f'Apni Dukan <{EMAIL_HOST_USER or "noreply@apni-dukan.local"}>',
+)
+ORDER_NOTIFICATION_EMAIL = os.environ.get('ORDER_NOTIFICATION_EMAIL', '')

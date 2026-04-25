@@ -5,12 +5,15 @@ import { api, Category, Product } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Layout from '@/components/Layout';
+import NewsletterSignup from '@/components/NewsletterSignup';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [storeType, setStoreType] = useState<'retail' | 'wholesale'>('retail');
@@ -23,6 +26,27 @@ export default function HomePage() {
     loadData();
   }, [storeType]);
 
+  // Debounced search-as-you-type suggestions.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      try {
+        const results = await api.getProducts({
+          search: q,
+          pricing: storeType === 'wholesale' ? 'wholesale' : undefined,
+        });
+        setSuggestions(results.slice(0, 6));
+      } catch {
+        setSuggestions([]);
+      }
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [searchQuery, storeType]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -31,7 +55,7 @@ export default function HomePage() {
         api.getProducts({ pricing: storeType === 'wholesale' ? 'wholesale' : undefined }),
       ]);
       setCategories(catsData);
-      setProducts(prodsData.slice(0, 12)); // Featured products
+      setProducts(prodsData.slice(0, 12));
     } catch (err: any) {
       setError(err.message || 'Failed to load data');
     } finally {
@@ -42,6 +66,7 @@ export default function HomePage() {
   const handleSearch = () => {
     if (searchQuery.trim()) {
       router.push(`/products?search=${encodeURIComponent(searchQuery)}`);
+      setShowSuggestions(false);
     }
   };
 
@@ -75,8 +100,13 @@ export default function HomePage() {
               type="text"
               placeholder="Search products..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               className="w-full px-4 py-3 pl-12 pr-16 border-2 border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300"
             />
             <svg
@@ -111,6 +141,41 @@ export default function HomePage() {
                 />
               </svg>
             </button>
+
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-30 left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+                {suggestions.map((s) => (
+                  <Link
+                    key={s.id}
+                    href={`/product/${s.id}`}
+                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-primary-50 transition-colors"
+                    onMouseDown={(e) => e.preventDefault()}
+                  >
+                    {s.image_url ? (
+                      <img src={s.image_url} alt={s.name} className="w-9 h-9 rounded object-cover" />
+                    ) : (
+                      <div className="w-9 h-9 rounded bg-gradient-to-br from-primary-100 to-accent-100 flex items-center justify-center text-lg">
+                        📦
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{s.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{s.category_name}</p>
+                    </div>
+                    <span className="text-sm font-bold text-primary-600">
+                      Rs. {parseFloat(s.display_price).toFixed(0)}
+                    </span>
+                  </Link>
+                ))}
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={handleSearch}
+                  className="w-full px-4 py-2.5 text-sm font-semibold text-primary-600 bg-primary-50 hover:bg-primary-100 transition-colors"
+                >
+                  See all results for &quot;{searchQuery.trim()}&quot; →
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -209,17 +274,36 @@ export default function HomePage() {
                     <img
                       src={product.image_url}
                       alt={product.name}
-                      className="w-full h-32 object-cover transition-transform duration-300 hover:scale-110"
+                      className={`w-full h-32 object-cover transition-transform duration-300 hover:scale-110 ${
+                        product.stock_quantity === 0 ? 'opacity-50 grayscale' : ''
+                      }`}
                     />
-                    {product.sale_price && (
+                    {product.stock_quantity === 0 && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <span className="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">
+                          Out of Stock
+                        </span>
+                      </div>
+                    )}
+                    {product.stock_quantity > 0 && product.is_low_stock && (
+                      <div className="absolute top-2 left-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow animate-pulse">
+                        Only {product.stock_quantity} left
+                      </div>
+                    )}
+                    {product.sale_price && product.stock_quantity > 0 && (
                       <div className="absolute top-2 right-2 bg-accent-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg animate-bounce">
                         Sale!
                       </div>
                     )}
                   </div>
                 ) : (
-                  <div className="w-full h-32 bg-gradient-to-br from-primary-100 to-accent-100 rounded mb-2 flex items-center justify-center transition-transform duration-300 hover:scale-110">
+                  <div className="w-full h-32 bg-gradient-to-br from-primary-100 to-accent-100 rounded mb-2 flex items-center justify-center transition-transform duration-300 hover:scale-110 relative">
                     <span className="text-4xl">📦</span>
+                    {product.stock_quantity === 0 && (
+                      <span className="absolute bottom-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                        Out of Stock
+                      </span>
+                    )}
                   </div>
                 )}
                 <h3 className="font-medium text-gray-800 mb-1 line-clamp-2 hover:text-primary-500 transition-colors">
@@ -241,20 +325,19 @@ export default function HomePage() {
                     MOQ: {product.wholesale_min_qty} {product.unit}
                   </p>
                 )}
-                {product.stock_quantity > 0 ? (
-                  <span className="inline-block mt-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                    ✓ In Stock
-                  </span>
-                ) : (
-                  <span className="inline-block mt-2 text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                    Out of Stock
-                  </span>
+                {product.review_count > 0 && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    <span className="text-accent-500">★</span>{' '}
+                    <span className="font-semibold">{product.average_rating?.toFixed(1)}</span>{' '}
+                    <span className="text-gray-400">({product.review_count})</span>
+                  </p>
                 )}
               </Link>
             ))}
           </div>
         </div>
       </div>
+      <NewsletterSignup />
     </Layout>
   );
 }

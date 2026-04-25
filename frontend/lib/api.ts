@@ -47,10 +47,41 @@ export interface Product {
   wholesale_min_qty: number;
   is_wholesale_available: boolean;
   stock_quantity: number;
+  is_low_stock: boolean;
   unit: string;
   image_url: string | null;
   is_active: boolean;
   created_at: string;
+  average_rating: number | null;
+  review_count: number;
+}
+
+export interface Review {
+  id: number;
+  product: number;
+  user: number;
+  user_name: string;
+  rating: number;
+  title: string;
+  body: string;
+  created_at: string;
+}
+
+export interface Coupon {
+  code: string;
+  description: string;
+  discount_type: 'PERCENT' | 'FLAT';
+  discount_value: string;
+  min_order_amount: string;
+  max_discount_amount: string | null;
+  valid_until: string | null;
+}
+
+export interface CouponValidation {
+  coupon: Coupon;
+  discount: string;
+  subtotal: string;
+  new_total_before_delivery: string;
 }
 
 export interface Address {
@@ -100,10 +131,43 @@ export interface Order {
   payment_method: string;
   order_type: 'RETAIL' | 'WHOLESALE';
   subtotal: string;
+  discount: string;
+  coupon_code: string;
   delivery_fee: string;
   total: string;
   items: OrderItem[];
   created_at: string;
+}
+
+export interface ReorderResponse {
+  cart: Cart;
+  added: Array<{ name: string; quantity: number }>;
+  skipped: Array<{ name: string; reason: string }>;
+}
+
+export interface DashboardStats {
+  totals: {
+    all_time_orders: number;
+    all_time_revenue: string;
+    orders_last_7_days: number;
+    revenue_last_7_days: string;
+    orders_last_30_days: number;
+    revenue_last_30_days: string;
+    pending_orders: number;
+  };
+  top_products: Array<{
+    product__id: number;
+    product__name: string;
+    qty_sold: number;
+    revenue: string;
+  }>;
+  low_stock: Array<{
+    id: number;
+    name: string;
+    stock_quantity: number;
+    unit: string;
+  }>;
+  orders_by_status: Record<string, number>;
 }
 
 class ApiClient {
@@ -250,11 +314,63 @@ class ApiClient {
   }
 
   // Checkout
-  async checkout(addressId: number, paymentMethod: string): Promise<Order> {
+  async checkout(
+    addressId: number,
+    paymentMethod: string,
+    couponCode?: string,
+  ): Promise<Order> {
     return this.request('/checkout/', {
       method: 'POST',
-      body: JSON.stringify({ address_id: addressId, payment_method: paymentMethod }),
+      body: JSON.stringify({
+        address_id: addressId,
+        payment_method: paymentMethod,
+        coupon_code: couponCode || '',
+      }),
     });
+  }
+
+  // Coupons
+  async validateCoupon(code: string): Promise<CouponValidation> {
+    return this.request('/coupons/validate/', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  }
+
+  // Reviews
+  async getReviews(productId: number): Promise<Review[]> {
+    const response = await this.request<any>(`/reviews/?product=${productId}`);
+    if (Array.isArray(response)) return response;
+    return response.results || [];
+  }
+
+  async createReview(data: { product: number; rating: number; title?: string; body?: string }): Promise<Review> {
+    return this.request('/reviews/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteReview(id: number): Promise<void> {
+    return this.request(`/reviews/${id}/`, { method: 'DELETE' });
+  }
+
+  // Newsletter
+  async subscribeNewsletter(email: string): Promise<{ message: string; email: string }> {
+    return this.request('/newsletter/subscribe/', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  // Reorder
+  async reorder(orderId: number): Promise<ReorderResponse> {
+    return this.request(`/orders/${orderId}/reorder/`, { method: 'POST' });
+  }
+
+  // Admin dashboard
+  async getDashboardStats(): Promise<DashboardStats> {
+    return this.request('/admin/dashboard-stats/');
   }
 
   // Orders

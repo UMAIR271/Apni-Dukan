@@ -3,31 +3,7 @@
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
-
-function Logo() {
-  const [showLogo, setShowLogo] = useState(false);
-
-  useEffect(() => {
-    // Check if logo exists on client side only
-    const img = new Image();
-    img.onload = () => setShowLogo(true);
-    img.onerror = () => setShowLogo(false);
-    img.src = '/logo.png';
-  }, []);
-
-  return (
-    <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center relative">
-      <span className={`text-2xl ${showLogo ? 'hidden' : 'block'}`}>🛒</span>
-      <img
-        src="/logo.png"
-        alt="Apni Dukan Logo"
-        className={`w-10 h-10 object-contain absolute inset-0 ${showLogo ? 'block' : 'hidden'}`}
-        onError={() => setShowLogo(false)}
-      />
-    </div>
-  );
-}
+import { useState } from 'react';
 
 export default function Navbar() {
   const { isAuthenticated, logout, user, accountType, wholesaleApproved } = useAuth();
@@ -51,7 +27,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link href="/" className="flex items-center group gap-2">
-            <Logo />
+            <span className="text-2xl flex-shrink-0" aria-hidden="true">🛒</span>
             <span className="text-2xl font-bold transition-all duration-300 group-hover:scale-105">
               <span className="text-primary-500 drop-shadow-lg">Apni</span>{' '}
               <span className="text-accent-500 drop-shadow-lg">Dukan</span>

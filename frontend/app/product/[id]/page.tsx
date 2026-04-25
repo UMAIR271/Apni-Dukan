@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { api, Product } from '@/lib/api';
 import Layout from '@/components/Layout';
+import ProductReviews from '@/components/ProductReviews';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function ProductPage() {
@@ -31,6 +32,33 @@ export default function ProductPage() {
       setQuantity(minQty);
     }
   }, [product, minQty]);
+
+  // Per-product page metadata: search engines that execute JS will pick this up,
+  // and it gives a much better browser tab title for users.
+  useEffect(() => {
+    if (!product) return;
+    const titleText = `${product.name} - Apni Dukan`;
+    document.title = titleText;
+    const setMeta = (selector: string, attr: string, content: string) => {
+      let el = document.head.querySelector(selector) as HTMLMetaElement | null;
+      if (!el) {
+        el = document.createElement('meta');
+        const [_, key, value] = selector.match(/\[(\w+)="([^"]+)"\]/) || [];
+        if (key && value) el.setAttribute(key, value);
+        document.head.appendChild(el);
+      }
+      el.setAttribute(attr, content);
+    };
+    const desc = product.description
+      ? product.description.slice(0, 160)
+      : `${product.name} available on Apni Dukan. Order online with free home delivery on orders over Rs. 5000.`;
+    setMeta('meta[name="description"]', 'content', desc);
+    setMeta('meta[property="og:title"]', 'content', titleText);
+    setMeta('meta[property="og:description"]', 'content', desc);
+    if (product.image_url) {
+      setMeta('meta[property="og:image"]', 'content', product.image_url);
+    }
+  }, [product]);
 
   const loadProduct = async () => {
     try {
@@ -193,14 +221,31 @@ export default function ProductPage() {
               <div className="mb-3 sm:mb-6 p-2 sm:p-4 bg-white border-2 border-gray-200 rounded-lg">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <span className="text-xs sm:text-sm text-gray-600 font-medium">Stock Status:</span>
-                  <span className={`px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold ${
-                    product.stock_quantity > 0 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {product.stock_quantity > 0 ? `✓ ${product.stock_quantity} available` : '✗ Out of Stock'}
-                  </span>
+                  {product.stock_quantity === 0 ? (
+                    <span className="px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold bg-red-100 text-red-800">
+                      ✗ Out of Stock
+                    </span>
+                  ) : product.is_low_stock ? (
+                    <span className="px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold bg-orange-100 text-orange-800 animate-pulse">
+                      ⚠️ Only {product.stock_quantity} left!
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 sm:px-3 sm:py-1 rounded-full text-xs sm:text-sm font-semibold bg-green-100 text-green-800">
+                      ✓ {product.stock_quantity} available
+                    </span>
+                  )}
                 </div>
+                {product.review_count > 0 && (
+                  <div className="mt-2 flex items-center gap-2 text-xs sm:text-sm">
+                    <span className="text-accent-500">
+                      {'★'.repeat(Math.round(product.average_rating || 0))}
+                      <span className="text-gray-300">{'★'.repeat(5 - Math.round(product.average_rating || 0))}</span>
+                    </span>
+                    <span className="text-gray-600">
+                      {product.average_rating?.toFixed(1)} · {product.review_count} review{product.review_count === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {product.stock_quantity > 0 && (
@@ -276,6 +321,8 @@ export default function ProductPage() {
             </div>
           </div>
         </div>
+
+        <ProductReviews productId={product.id} />
       </div>
     </Layout>
   );

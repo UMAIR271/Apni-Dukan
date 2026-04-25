@@ -11,10 +11,32 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reorderingId, setReorderingId] = useState<number | null>(null);
+  const [reorderMessage, setReorderMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrders();
   }, []);
+
+  const handleReorder = async (e: React.MouseEvent, orderId: number) => {
+    e.stopPropagation();
+    try {
+      setReorderingId(orderId);
+      setReorderMessage(null);
+      const res = await api.reorder(orderId);
+      if (res.added.length === 0) {
+        setReorderMessage('No items could be added (everything is unavailable or out of stock).');
+        return;
+      }
+      const skippedNote = res.skipped.length > 0 ? ` Skipped ${res.skipped.length} item(s).` : '';
+      setReorderMessage(`Added ${res.added.length} item(s) to your cart.${skippedNote}`);
+      setTimeout(() => router.push('/cart'), 600);
+    } catch (err: any) {
+      setReorderMessage(err.message || 'Could not reorder right now.');
+    } finally {
+      setReorderingId(null);
+    }
+  };
 
   const loadOrders = async () => {
     try {
@@ -130,8 +152,22 @@ export default function OrdersPage() {
                       Rs. {parseFloat(order.total).toFixed(2)}
                     </p>
                   </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={(e) => handleReorder(e, order.id)}
+                      disabled={reorderingId === order.id}
+                      className="px-4 py-2 text-sm bg-primary-50 hover:bg-primary-100 text-primary-700 border border-primary-200 rounded-full font-semibold disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {reorderingId === order.id ? 'Adding...' : '🔁 Reorder'}
+                    </button>
+                  </div>
                 </div>
               ))}
+            </div>
+          )}
+          {reorderMessage && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-primary-600 text-white px-5 py-3 rounded-full shadow-2xl text-sm z-50">
+              {reorderMessage}
             </div>
           )}
         </div>

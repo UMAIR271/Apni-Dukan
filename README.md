@@ -4,14 +4,24 @@ A complete Django REST Framework backend for a grocery delivery application.
 
 ## Features
 
-- **User Authentication**: Token-based authentication with signup/login endpoints
-- **Product Management**: Categories and products with stock tracking
-- **Shopping Cart**: Add, update, and remove items from cart
-- **Order Management**: Complete order lifecycle with status tracking
+- **User Authentication**: Token-based authentication, rate-limited signup/login
+- **Product Management**: Categories and products with image uploads + URL fallback
+- **Shopping Cart**: Add, update, remove items
+- **Order Management**: Full lifecycle with a 4-step visual progress tracker
+- **Reorder**: One-click "buy these again" from any past order
 - **Address Management**: Multiple delivery addresses per user
-- **Stock Management**: Automatic stock reduction on order confirmation
-- **Delivery Fee Calculation**: Free delivery for orders >= 800, otherwise 50
-- **Admin Panel**: Full Django admin interface for managing products, categories, and orders
+- **Stock Management**: Auto stock reduction on order confirmation, low-stock badges
+- **Configurable business rules**: minimum order, free-delivery threshold, delivery fee
+- **Promo codes / coupons**: percent or flat discounts with usage limits & expiry
+- **Reviews & ratings**: 5-star reviews per product, moderated from admin
+- **Order email notifications**: shop owner gets an email on every order (background thread)
+- **Newsletter signup**: capture email subscribers to a managed list
+- **WhatsApp contact button**: floating CTA wired to your number
+- **Search**: ranked multi-field search with type-ahead suggestions
+- **Admin dashboard**: revenue, top products, low-stock, orders by status (`/admin/dashboard`)
+- **SEO**: `sitemap.xml`, `robots.txt`, per-product page metadata
+- **Production hardening**: caching, rate limiting, threaded emails
+- **Admin Panel**: Full Django admin for products, categories, orders, coupons, reviews, subscribers
 
 ## Tech Stack
 
