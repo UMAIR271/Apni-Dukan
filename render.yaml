@@ -1,0 +1,28 @@
+# Render Blueprint — one-click deploy of the Django backend.
+# After connecting the repo on render.com, click "New + → Blueprint".
+services:
+  - type: web
+    name: apni-dukan-api
+    runtime: python
+    plan: free
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn apni_dukan.wsgi:application"
+    healthCheckPath: /admin/login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.6
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      # Set these in the Render dashboard after the first deploy:
+      - key: DATABASE_URL
+        sync: false        # paste your Neon / Supabase connection string
+      - key: CLOUDINARY_URL
+        sync: false        # paste cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false        # e.g. https://your-app.vercel.app
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false        # e.g. https://your-app.vercel.app,https://*.onrender.com
